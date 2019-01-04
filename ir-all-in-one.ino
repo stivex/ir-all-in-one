@@ -1,30 +1,30 @@
-//#include "IRLibAll.h" //Inclou tota la llibreria complerta de IRLib2 (menys eficient i ocupa més espai de memòria)
+//#include "IRLibAll.h" //It includes all IRLib2 functionalities (but it is less efficient and it takes up more memory space in Arduino)
 
-#include <IRLibRecvPCI.h> //Llibreria encarregada de rebre i gestionar la recepció de senyals infrarojos
-#include <IRLibSendBase.h> //Llibreria encarregada d'enviar i gestionar l'enviament de senyals infrarojos
-#include <IRLibDecodeBase.h> //Llibreria base de descodificació
-#include <IRLib_P01_NEC.h> //Llibreria pel protocol NEC
-#include <IRLib_P02_Sony.h> //Llibreria pel protocol Sony
-#include <IRLib_P07_NECx.h> //Llibreria pel protocol NECx
-#include <IRLibCombo.h> //Llibreria que s'encarregarà de fer de contenidor/encapsulador de totes les llibreries de protocols
+#include <IRLibRecvPCI.h> //This class has the mission to receiving and managing the infrared signal.
+#include <IRLibSendBase.h> //This class has the mission to sending and managing the infrared signal.
+#include <IRLibDecodeBase.h> //Infrared decoder base class.
+#include <IRLib_P01_NEC.h> //NEC protocol class.
+#include <IRLib_P02_Sony.h> //Sony protocol class.
+#include <IRLib_P07_NECx.h> //NECx protocol class.
+#include <IRLibCombo.h> //Class that has mission to become the container/encapsulate the rest of protocol classes.
 
-//Per aquest projecte s'ha utilitzat:
+For this project we have used:
 
 //HARDWARE
 //-Arduino UNO
-//-Receptor infrarojos: KY-022
-//-Emissor infrarojos: KY-005
-//-Comandament a distància: AA59-00638A (TV Samsung)
-//-Comandament a distància: RM-SR10AV (HIFI Sony)
-//-Comandament a distància: Descodificador Digital-Analògic MOCHA JY-M2 QianHuan
+//-Infrared receiver: KY-022
+//-Infrared emitter: KY-005
+//-Remote control: AA59-00638A (Samsung TV)
+//-Remote control: RM-SR10AV (Sony HiFi)
+//-Remote control: Digital-Analog Decoder MOCHA JY-M2 QianHuan
 
 
 //SOFTWARE
-//-IDE Arduino 1.8.7 (Debian 8 GNU/Linux)
+//-Arduino IDE 1.8.7 (Debian 8 GNU/Linux)
 //-Arduino AVR Boards 1.6.21
-//-Libreria IRLib2 (https://github.com/cyborg5/IRLib2)
+//-IRLib2 Library (https://github.com/cyborg5/IRLib2)
 
-//TV SAMSUNG
+//SAMSUNG TV
 #define TV_PROTOCOL     NECX
 #define TV_NUM_BITS     32
 #define TV_POWER        0xE0E040BF
@@ -32,12 +32,12 @@
 #define TV_VOLUME_DOWN  0xE0E0D02F
 #define TV_VOLUME_MUTE  0XE0E0F00F
 
-//HIFI SONY
+//SONY HiFi
 #define HIFI_PROTOCOL   SONY
 #define HIFI_NUM_BITS   12
 #define HIFI_POWER      0xA81
 
-//DESCODIFICADOR AUDIO MOCHA
+//AUDIO DECODER MOCHA
 #define AUDIO_DECODER_PROTOCOL      NEC
 #define AUDIO_DECODER_BITS          32
 #define AUDIO_DECODER_POWER         0x4FBC03F
@@ -45,66 +45,67 @@
 #define AUDIO_DECODER_VOLUME_DOWN   0x4FB10EF
 #define AUDIO_DECODER_VOLUME_MUTE   0x4FB30CF
 
-//Indicant que treballarem amb l'objete IRrecvPCI, treballarem amb interrupcions
-IRrecvPCI myReceiver(2); //Indiquem per quin pin digital rebrem/tenim conectat sensor infrarojos (el pin 2 de l'Arduino UNO accepta interrupcions)
-IRdecode myDecoder;   //Creem un objecte descodificador
-IRsend mySender; //Creem un objecte per poder enviar senyals d'infraroig a través del sensor emissor 
+//We set that we work with IRrecvPCI object, we will work with interruptions.
+IRrecvPCI myReceiver(2); //We set witch digital pin we will receive the signal or we have connected the infrared receiver sensor (in our case pin 2, because Arduino UNO accepts interruptions in this pin).
+IRdecode myDecoder;   //We create an infrared decoder object.
+IRsend mySender; //We create an object able to send infrared signals through the infrared emitter.
 
 void setup() {
-  Serial.begin(9600); //Indiquem la velocitat de lectura pel monitor sèrie
-  delay(2000);  //Esperem 2 segons
-  while (!Serial); //delay per l'Arduino Leonardo
+  Serial.begin(9600); //We set the reading speed for serial monitor.
+  delay(2000);  //We wait 2 seconds
+  while (!Serial); //Delay for Arduino Leonardo
 
-  //Farem que quan arrenqui l'Arduino (quan s'encengui la TV) enviarem un senyal de power a l'equip de so i el descodificador d'àudio
+  //When the TV turns on, our Arduino is powered by our TV through USB. 
+  //This means that when Arduino turns on we have to send an infrared power on signal to our HiFi and audio decoder appliances.
   mySender.send(HIFI_PROTOCOL, HIFI_POWER, HIFI_NUM_BITS);
-  myReceiver.enableIRIn(); //Alliberem
+  myReceiver.enableIRIn(); //We release/enable the interruptions.
   mySender.send(AUDIO_DECODER_PROTOCOL, AUDIO_DECODER_POWER, AUDIO_DECODER_BITS);
   
-  myReceiver.enableIRIn(); //Indiquem en el nostre receptor que pot començar a escoltar què li arriba pel sensor d'infrarojos, habilitem les interrupcions
-  Serial.println(F("Preparat per rebre senyals IR")); //Mostrem per la pantalla del monitor sèria que el programa està inicialitzat i llest
+  myReceiver.enableIRIn(); //We set that our infrared receiver can start listening infrared signals. We release interruptions, enable the interruptions.
+  Serial.println(F("Ready to receive IR signals.")); //We show through the serial monitor a text to inform that we are ready to start.
 }
 
 void loop() {
   
-  //Anirem executant aquest bucle fins obenir un senyal complet
+  //We execute this bucle method until getting a complete IR signal.
 
-  //Aquesta funció (getResults()) mira si s'ha rebut una seqüència complerta
+  //This function getResults() checks if we have received a complete IR sequence.
   if (myReceiver.getResults()) { 
 
-    //Hem rebut un senyal complert
+    //We have received a complete IR sequence.
 
-    //Descodofiquem el senyal complert rebut, deshabilitant les interrupcions (aquesta funció ens retorna un boleà TRUE=protocol reconegut o bé FALSE=protocol desconegut)
+    //We decode the IR signal that we have received, we disable the interruptions (this function returns TRUE when it recognises the protocol, in other case FALSE).
     if (myDecoder.decode()) {
       
-      //El protocol del senyal rebut és conegut per la llibreria
-      //Mostrem per pantalla el resultat de descodificar-lo. ("true" amb detall, indicar "false" perquè retorni menys detalls per pantalla)  
+      //The protocol has been recognised by the library.
+      //We show through the serial monitor the result of decoding the signal (TRUE with details, FALSE without details).
       myDecoder.dumpResults(false);  
 
-      //Només tractarem els senyals provinents del comandament de la TV Samsung
+      //We only analyze the signal that comes from our TV.
       Serial.println(myDecoder.protocolNum);
       if (myDecoder.protocolNum == TV_PROTOCOL) {
         
-        Serial.println("És el comandament de la TV Samsung");
+        Serial.println("The signal comes from TV remote control.");
 
-        //Depenent de la tecla del comandament de la tv realizarem una acció o altre
+        //It depends which TV remote control key we have pressed, we will do an action or another.
         switch (myDecoder.value) {
           case TV_POWER:
             mySender.send(HIFI_PROTOCOL, HIFI_POWER, HIFI_NUM_BITS);
-            myReceiver.enableIRIn(); //Alliberem
+            myReceiver.enableIRIn(); //We release/enable the interruptions.
             mySender.send(AUDIO_DECODER_PROTOCOL, AUDIO_DECODER_POWER, AUDIO_DECODER_BITS);
-            Serial.println("S'ha enviat senyal d'encendre/apagar.");
+            Serial.println("A power on/off signal has been sent to HiFi and audio decoder.");
             break;
           case TV_VOLUME_UP:
             mySender.send(AUDIO_DECODER_PROTOCOL, AUDIO_DECODER_VOLUME_UP, AUDIO_DECODER_BITS);
-            Serial.println("S'ha enviat senyal de pujar volum.");
+            Serial.println("A volume up signal has been sent to audio decoder.");
             break;
           case TV_VOLUME_DOWN:
             mySender.send(AUDIO_DECODER_PROTOCOL, AUDIO_DECODER_VOLUME_DOWN, AUDIO_DECODER_BITS);
-            Serial.println("S'ha enviat senyal de baixar volum.");
+            Serial.println("A volume down signal has been sent to audio decoder.");
             break;
           case TV_VOLUME_MUTE:
             mySender.send(AUDIO_DECODER_PROTOCOL, AUDIO_DECODER_VOLUME_MUTE, AUDIO_DECODER_BITS);
-            Serial.println("S'ha enviat senyal de treure/posar volum.");
+            Serial.println("A mute volume signal has been sent to audio decoder.");
             break;          
         }
         
@@ -112,7 +113,7 @@ void loop() {
       
     }
     
-    //Reiniciem el receptor, habilitem de nou les interrupcions
+    //We release/enable the interruptions.
     myReceiver.enableIRIn();
     
   }
